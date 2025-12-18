@@ -5,7 +5,7 @@ import math,std/random
 var gameWidth:float=480
 var gameHeight:float=480
 var gridSize:float=32
-var gameTickMS:float=0.25 # The interval between logic updates (game speed)
+var gameTickMS:float=0.20 # The interval between logic updates (game speed)
 var smoothMotion:bool=true # Toggle between classic (grid-based) and smooth interpolation
 #endregion
 
