@@ -5,8 +5,8 @@ import math,std/random
 var gameWidth:float=480
 var gameHeight:float=480
 var gridSize:float=32
-var gameTickMS:float=0.20
-var smoothMotion:bool=true
+var gameTickMS:float=0.25 # The interval between logic updates (game speed)
+var smoothMotion:bool=true # Toggle between classic (grid-based) and smooth interpolation
 #endregion
 
 #Helper Values
@@ -23,11 +23,14 @@ var prevDirectionY:int=directionY
 
 
 #region GRID
-var grid:seq[seq[int]]
-var emptyCells:seq[tuple[x:int,y:int]]
+var grid:seq[seq[int]] # 2D array to keep track of occupied cells
+var emptyCells:seq[tuple[x:int,y:int]] # List of available cells for apple spawning
+
+# Converts screen position to grid index
 proc posToCell(pos:float) :int =
   result=ceil(pos/gridSize).int-1
 
+# Converts grid index back to center-of-cell screen position
 proc cellToPos(cellPos:int) :float =
   var halfGridSize=gridSize*0.5
   result=cellPos.float*gridSize+halfGridSize
@@ -44,6 +47,7 @@ type
 
 var apples:seq[Apple]
 
+# Spawns an apple at a random available grid location
 proc addApple() =
   let randomCell=emptyCells[rand(emptyCells.len-1).int ]
   var posX=cellToPos(randomCell.x)
@@ -94,8 +98,7 @@ type
 var snakeParts:seq[SnakePart]
 let snakeSpeed:float=3.0
 
-
-
+# Adds a new part to the tail using the last part's movement history
 proc addSnakePart() =
   var cellX=snakeParts[^1].prevCellX
   var cellY=snakeParts[^1].prevCellY
@@ -107,11 +110,11 @@ proc drawSnake() =
   if snakeParts.len==0 : return
   setLine(gridSize,JoinTypes.Round,CapTypes.Round,CapTypes.Round)
   var linePath:seq[float]
-  let lerpRate=tickMSCounter/gameTickMS
+  let lerpRate=tickMSCounter/gameTickMS # Progression factor between current and next tick
   for i in 0..<snakeParts.len :
     var posX,posY:float
     if smoothMotion :
-      #Smooth Motion
+      # Interpolate position between prevCell and cell for fluid animation
       posX=cellToPos(snakeParts[i].prevCellX)
       posY=cellToPos(snakeParts[i].prevCellY)
       
@@ -133,7 +136,7 @@ proc drawSnake() =
 
 
     else :
-      #Classic Motion
+      # Snap directly to grid cells (Classic mode)
       posX=cellToPos(snakeParts[i].cellX)
       posY=cellToPos(snakeParts[i].cellY)
       linePath.add(posX)
@@ -161,6 +164,7 @@ proc drawSnake() =
   setLineWidth(6.0)
   line(linePath)
 
+# Scans the grid and identifies cells not occupied by the snake
 proc updateEmptyCells() =
   #Define Empty Cells 
   emptyCells.setLen(0)
@@ -213,10 +217,12 @@ proc drawGameOverPanel() =
   var beginY=(gameHeight-panelHeight)*0.5
   var centerX=beginX+panelWidth*0.5
   var centerY=beginY+panelHeight*0.5
+  #Panel
   setColor("#102323")
   rectangle(DrawModes.Fill,beginX,beginY,panelWidth,panelHeight)
   setColor("#f6fda9")
   rectangle(DrawModes.Fill,beginX+8,beginY+8,panelWidth-16,panelHeight-16)
+  #Title Bar
   setColor("#fdae19")
   rectangle(DrawModes.Fill,beginX,beginY,panelWidth,48)
   setColor("#102323")
@@ -241,7 +247,7 @@ proc drawGameOverPanel() =
 
 #region GAME
 
-
+# Resets all game states for a new session
 proc replayGame() =
   score=0
   directionX=1
@@ -263,7 +269,7 @@ proc replayGame() =
   addSnakePart()
   addSnakePart()
 
-  #
+  # Add an apple 
   apples.setLen(0)
   updateEmptyCells()
   addApple()
@@ -307,6 +313,7 @@ proc update( dt:float) =
   
   tickMSCounter+=dt
   
+  # Handle Input
   var newDirectionX,newDirectionY:int
   if isKeyPressed(KeyboardKey.Up) or isKeyPressed(KeyboardKey.W) :
     newDirectionX=0
@@ -321,11 +328,12 @@ proc update( dt:float) =
     newDirectionX= 1
     newDirectionY= 0
 
-  #Ignoring to the reverse direction calls
+  # Preventing 180-degree turns
   if prevDirectionX-newDirectionX!=0 and prevDirectionY-newDirectionY!=0 :
     directionX=newDirectionX
     directionY=newDirectionY
 
+  # Wait for the next logic tick
   if tickMSCounter<gameTickMS :
     return
   tickMSCounter=0
@@ -340,12 +348,12 @@ proc update( dt:float) =
   let nextCellX=snakeParts[0].cellX+directionX
   let nextCellY=snakeParts[0].cellY+directionY
   
-  # Check self-collision (next cell)
+  # Logic: Self-collision check (next cell)
   for i in 1..<snakeParts.len :
     if snakeParts[i].cellX==nextCellX and snakeParts[i].cellY==nextCellY :
       isGameOver=true
       
-  # Check out-of-bounds (next cell)
+  # Logic: Wall-collision check (next cell)
   if nextCellX<0 or  nextCellX>gridWidth-1 :
     isGameOver=true
     
@@ -356,20 +364,20 @@ proc update( dt:float) =
     return 
     
 
-  # Move head Part of the snake
+  # Update Positions: Head follows direction
   snakeParts[0].prevCellX=snakeParts[0].cellX
   snakeParts[0].prevCellY=snakeParts[0].cellY
   snakeParts[0].cellX=nextCellX
   snakeParts[0].cellY=nextCellY
 
-  # Move other parts of the snake
+  # Update Positions: Each tail part follows the previous part's old position
   for i in 1..<snakeParts.len :
     snakeParts[i].prevCellX=snakeParts[i].cellX
     snakeParts[i].prevCellY=snakeParts[i].cellY
     snakeParts[i].cellX=snakeParts[i-1].prevCellX
     snakeParts[i].cellY=snakeParts[i-1].prevCellY
 
-  # Check Apple 
+  # Logic: Eating an apple 
   for i in 0..<apples.len :
     if snakeParts[0].cellX == apples[i].cellX :
       if snakeParts[0].cellY == apples[i].cellY :
@@ -393,6 +401,8 @@ proc draw() =
   setColor(DarkGray)
   setLine(1)
   translate(gamebeginX,gamebeginY)
+  
+  # Render checkerboard grid background
   var colorCounter:int=0
   for cy in 0..<grid.len :
     let posY:float=cellToPos(cy)
@@ -405,6 +415,7 @@ proc draw() =
       colorCounter+=1
       #line(posX,0.0,posX,gameHeight)
     
+  # Draw frame
   setColor("#102323")
   setLine(8.0,JoinTypes.Round)
   rectangle(DrawModes.Line,-4,-4,gameWidth+4,gameHeight+4)
@@ -421,7 +432,7 @@ proc draw() =
 
   pop()
   
-  #Drawing Score
+  # HUD - Score and Instructions
   setColor("#102323")
   var scoreStr="SCORE:" & $score
   var scoreText=newText(scoreStr, getDefaultFont() )
