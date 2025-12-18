@@ -5,7 +5,7 @@ import math,std/random
 var gameWidth:float=480
 var gameHeight:float=480
 var gridSize:float=32
-var gameTickMS:float=0.20 # The interval between logic updates (game speed)
+var gameTickMS:float=0.15 # The interval between logic updates (game speed)
 var smoothMotion:bool=true # Toggle between classic (grid-based) and smooth interpolation
 #endregion
 
@@ -20,6 +20,7 @@ var directionX:int=1
 var directionY:int=0
 var prevDirectionX:int=directionX
 var prevDirectionY:int=directionY
+var inputStack:seq[tuple[x:int,y:int]]
 
 
 #region GRID
@@ -318,27 +319,37 @@ proc update( dt:float) =
   if isKeyPressed(KeyboardKey.Up) or isKeyPressed(KeyboardKey.W) :
     newDirectionX=0
     newDirectionY= -1
-  elif isKeyPressed(KeyboardKey.Down) or isKeyPressed(KeyboardKey.S) :
+  if isKeyPressed(KeyboardKey.Down) or isKeyPressed(KeyboardKey.S) :
     newDirectionX=0
     newDirectionY= 1
-  elif isKeyPressed(KeyboardKey.Left) or isKeyPressed(KeyboardKey.A) :
+  if isKeyPressed(KeyboardKey.Left) or isKeyPressed(KeyboardKey.A) :
     newDirectionX= -1
     newDirectionY= 0
-  elif isKeyPressed(KeyboardKey.Right) or isKeyPressed(KeyboardKey.D) :
+  if isKeyPressed(KeyboardKey.Right) or isKeyPressed(KeyboardKey.D) :
     newDirectionX= 1
     newDirectionY= 0
 
-  # Preventing 180-degree turns
-  if prevDirectionX-newDirectionX!=0 and prevDirectionY-newDirectionY!=0 :
-    directionX=newDirectionX
-    directionY=newDirectionY
+  # Input buffering: Store valid turns to prevent 180-degree collisions and handle fast inputs
+  if inputStack.len==0 :
+    # Preventing 180-degree turns
+    if prevDirectionX-newDirectionX!=0 and prevDirectionY-newDirectionY!=0 :
+      inputStack.add((x:newDirectionX,y:newDirectionY))
+  else:
+    # Preventing 180-degree turns
+    if inputStack[^1].x-newDirectionX!=0 and inputStack[^1].y-newDirectionY!=0 :
+      inputStack.add((x:newDirectionX,y:newDirectionY))
+    
 
   # Wait for the next logic tick
   if tickMSCounter<gameTickMS :
     return
   tickMSCounter=0
 
-  
+  # Process the next movement from the buffer and update direction
+  if inputStack.len!=0 :
+    directionX=inputStack[0].x
+    directionY=inputStack[0].y
+    inputStack.del(0)
 
 
   prevDirectionX=directionX
